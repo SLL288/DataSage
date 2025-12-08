@@ -1,0 +1,14 @@
+# Node / Next.js
+frontend/.next
+frontend/node_modules
+frontend/.turbo
+
+# Python
+backend/.venv
+backend/__pycache__
+backend/.pytest_cache
+
+# OS / misc
+.DS_Store
+Thumbs.db
+*.log
