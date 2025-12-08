@@ -1,9 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    appDir: true,
+  output: 'export',       // <-- this makes static HTML export for Cloudflare!
+  distDir: 'out',         // <-- this matches Cloudflare output directory
+
+  images: {
+    unoptimized: true,    // <-- required for static Next.js export
   },
-  output: "standalone",
 };
 
 module.exports = nextConfig;
