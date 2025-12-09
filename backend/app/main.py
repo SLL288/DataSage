@@ -234,10 +234,10 @@ def assemble_payload(rows: List[Dict[str, str]], schema: SchemaGuess) -> UploadR
     )
 
 
-def detect_anomalies(series: List[Dict[str, float]]) -> List[Anomaly]:
+def detect_anomalies(series: List[TimePoint]) -> List[Anomaly]:
     if len(series) < 5:
         return []
-    values = np.array([p["revenue"] for p in series])
+    values = np.array([p.revenue for p in series])
     mean = values.mean()
     std = values.std() or 1
     anomalies: List[Anomaly] = []
@@ -246,10 +246,10 @@ def detect_anomalies(series: List[Dict[str, float]]) -> List[Anomaly]:
         if abs(z) >= 2.5:
             anomalies.append(
                 Anomaly(
-                    date=point["date"],
+                    date=point.date,
                     value=float(raw),
                     z_score=float(round(z, 2)),
-                    message=f"Revenue anomaly on {point['date']}: {raw:.2f} (z={z:.2f})",
+                    message=f"Revenue anomaly on {point.date}: {raw:.2f} (z={z:.2f})",
                 )
             )
     return anomalies
