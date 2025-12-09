@@ -502,7 +502,10 @@ def import_google_sheet(
     revenue_column: Optional[str] = Form(None),
     category_column: Optional[str] = Form(None),
 ) -> UploadResponse:
-    content = fetch_google_sheet_csv(sheet_csv_url)
+    try:
+        content = fetch_google_sheet_csv(sheet_csv_url)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         rows = parse_csv(content)
     except Exception as exc:  # noqa: BLE001
