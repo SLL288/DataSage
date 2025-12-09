@@ -12,7 +12,7 @@ import { ChartSkeleton, FeedSkeleton, KpiSkeleton } from "@/components/Skeletons
 import MappingForm from "@/components/MappingForm";
 import CategoryChart from "@/components/CategoryChart";
 import Filters from "@/components/Filters";
-import { explainPeriod, uploadCsv } from "@/lib/api";
+import { explainPeriod, exportPdf, importGoogleSheet, uploadCsv } from "@/lib/api";
 
 export default function HomePage() {
   const [result, setResult] = useState<UploadResult | null>(null);
@@ -26,6 +26,8 @@ export default function HomePage() {
   const [explaining, setExplaining] = useState(false);
   const [dateRange, setDateRange] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [downloading, setDownloading] = useState(false);
 
   const hasData = Boolean(result);
   const step = useMemo(() => (loading ? 2 : hasData ? 3 : 1), [loading, hasData]);
@@ -94,6 +96,56 @@ export default function HomePage() {
     }
   };
 
+  const handleGoogleSheetImport = async () => {
+    if (!sheetUrl) {
+      setError("Please paste a Google Sheet CSV export link.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await importGoogleSheet(sheetUrl);
+      setResult(res);
+      setColumns(res.columns || []);
+      setNeedsMapping(false);
+    } catch (err) {
+      const detail = (err as any).detail;
+      if (detail?.columns) {
+        setColumns(detail.columns);
+        setNeedsMapping(true);
+      }
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePdf = async () => {
+    if (!result) return;
+    setDownloading(true);
+    try {
+      const blob = await exportPdf({
+        metrics: result.metrics,
+        timeseries: result.timeseries,
+        categories: result.categories,
+        anomalies: result.anomalies,
+        narrative: explainText || result.narrative,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "datasage-summary.pdf";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <main className="space-y-10">
       <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-brand-700/30 via-brand-500/10 to-white/5 p-8 shadow-2xl">
@@ -151,6 +203,25 @@ export default function HomePage() {
       <section id="upload" className="space-y-4">
         <UploadCard onUpload={runUpload} loading={loading} error={error} />
         {needsMapping && columns.length > 0 && <MappingForm columns={columns} onSubmit={(mapping) => lastFile && runUpload(lastFile, mapping)} />}
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <p className="text-sm font-semibold text-white">Or paste a Google Sheet CSV link</p>
+          <p className="text-xs text-[var(--muted)]">Use File → Share → Publish to web → CSV, then paste here.</p>
+          <div className="mt-3 flex flex-col gap-2 md:flex-row">
+            <input
+              value={sheetUrl}
+              onChange={(e) => setSheetUrl(e.target.value)}
+              placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv"
+              className="flex-1 rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-sm text-white"
+            />
+            <button
+              onClick={handleGoogleSheetImport}
+              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-brand-700 shadow-lg hover:-translate-y-0.5 transition disabled:opacity-60"
+              disabled={loading}
+            >
+              Connect Google Sheet
+            </button>
+          </div>
+        </div>
         <div className="relative grid gap-4 md:grid-cols-3">
           <div className="pointer-events-none absolute inset-0 -z-10 motion-safe:animate-pulse">
             <div className="mx-auto h-16 w-16 rotate-90 border-l-2 border-dashed border-brand-500/50" />
@@ -210,6 +281,13 @@ export default function HomePage() {
                   <p className="mt-2 text-xs text-[var(--muted)]">
                     Replace with model-driven forecasts and store in Postgres for alerting.
                   </p>
+                  <button
+                    className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-2 text-xs font-semibold text-white hover:bg-white/10 transition disabled:opacity-60"
+                    onClick={handlePdf}
+                    disabled={!result || downloading}
+                  >
+                    {downloading ? "Preparing PDF..." : "Download PDF"}
+                  </button>
                 </div>
               </>
             )}

@@ -2,13 +2,13 @@
 
 Mono-repo scaffold for a data insights product:
 - Frontend: Next.js + Tailwind, charted with Chart.js via `react-chartjs-2`.
-- Backend: FastAPI for file ingest, structure detection, insights/anomaly stubs.
+- Backend: FastAPI for file ingest (CSV/Excel/Google Sheets CSV), structure detection, insights/anomaly stubs, PDF export.
 - DB: Postgres-ready config surface (no migrations run here).
 - Integrations: placeholders for Google Sheets, Shopify, Stripe, and GPT-5.
 
 ### Layout
-- `frontend/`: Next.js app with upload/connect flow, dashboard mock, alerts, weekly summary preview.
-- `backend/`: FastAPI service with CSV ingest, heuristic metric detection, mock AI insight generation.
+- `frontend/`: Next.js app with upload/connect flow, dashboard mock, alerts, weekly summary preview, Google Sheets import, and PDF download button.
+- `backend/`: FastAPI service with CSV/XLSX ingest, Google Sheets CSV import, heuristic metric detection, mock AI insight generation, PDF export.
 
 ### Quick start (local dev)
 1) Backend  

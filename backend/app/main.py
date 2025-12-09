@@ -8,10 +8,12 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import requests
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openpyxl import load_workbook
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 
 app = FastAPI(title="Data Insights API", version="0.1.0")
@@ -75,6 +77,14 @@ class ExplainRequest(BaseModel):
 class ExplainResponse(BaseModel):
     explanation: str
     tags: List[str]
+
+
+class PdfRequest(BaseModel):
+    metrics: MetricBreakdown
+    timeseries: List[Dict[str, float]] = []
+    categories: List[CategoryBreakdown] = []
+    anomalies: List[Anomaly] = []
+    narrative: str
 
 
 def parse_csv(content: bytes) -> List[Dict[str, str]]:
@@ -193,6 +203,24 @@ def build_categories(rows: List[Dict[str, str]], schema: SchemaGuess) -> List[Ca
     return [CategoryBreakdown(name=name, total=round(total, 2)) for name, total in top]
 
 
+def assemble_payload(rows: List[Dict[str, str]], schema: SchemaGuess) -> UploadResponse:
+    metrics = compute_metrics(rows, schema)
+    timeseries = build_timeseries(rows, schema)
+    anomalies = detect_anomalies(timeseries)
+    categories = build_categories(rows, schema)
+    narrative = build_narrative(schema, metrics, anomalies)
+    columns = list(rows[0].keys())
+    return UploadResponse(
+        schema=schema,
+        metrics=metrics,
+        timeseries=timeseries,
+        anomalies=anomalies,
+        narrative=narrative,
+        columns=columns,
+        categories=categories,
+    )
+
+
 def detect_anomalies(series: List[Dict[str, float]]) -> List[Anomaly]:
     if len(series) < 5:
         return []
@@ -290,6 +318,70 @@ def call_workers_ai(prompt: str) -> Optional[str]:
     return data.get("result", {}).get("response")
 
 
+def build_pdf(req: PdfRequest) -> bytes:
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    y = height - 50
+
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.drawString(50, y, "DataSage Weekly Summary")
+    y -= 24
+
+    pdf.setFont("Helvetica", 11)
+    pdf.drawString(50, y, f"Total revenue: {req.metrics.total_revenue}")
+    y -= 16
+    pdf.drawString(50, y, f"Total cost: {req.metrics.total_cost}")
+    y -= 16
+    pdf.drawString(50, y, f"Net result: {req.metrics.total_profit}")
+    y -= 16
+    pdf.drawString(50, y, f"Weekly growth: {req.metrics.weekly_growth_pct}%")
+    y -= 24
+
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(50, y, "Narrative")
+    y -= 16
+    pdf.setFont("Helvetica", 10)
+    for line in req.narrative.split(". "):
+        pdf.drawString(50, y, line.strip())
+        y -= 14
+        if y < 80:
+            pdf.showPage()
+            y = height - 50
+            pdf.setFont("Helvetica", 10)
+
+    if req.categories:
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(50, y, "Top categories")
+        y -= 16
+        pdf.setFont("Helvetica", 10)
+        for cat in req.categories[:6]:
+            pdf.drawString(50, y, f"{cat.name}: {cat.total}")
+            y -= 14
+            if y < 80:
+                pdf.showPage()
+                y = height - 50
+                pdf.setFont("Helvetica", 10)
+
+    if req.anomalies:
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(50, y, "Alerts")
+        y -= 16
+        pdf.setFont("Helvetica", 10)
+        for a in req.anomalies[:6]:
+            pdf.drawString(50, y, f"{a.date} - {a.message}")
+            y -= 14
+            if y < 80:
+                pdf.showPage()
+                y = height - 50
+                pdf.setFont("Helvetica", 10)
+
+    pdf.showPage()
+    pdf.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 @app.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "ok"}
@@ -329,21 +421,7 @@ async def upload(
             },
         )
 
-    metrics = compute_metrics(rows, schema)
-    timeseries = build_timeseries(rows, schema)
-    anomalies = detect_anomalies(timeseries)
-    categories = build_categories(rows, schema)
-    narrative = build_narrative(schema, metrics, anomalies)
-
-    return UploadResponse(
-        schema=schema,
-        metrics=metrics,
-        timeseries=timeseries,
-        anomalies=anomalies,
-        narrative=narrative,
-        columns=columns,
-        categories=categories,
-    )
+    return assemble_payload(rows, schema)
 
 
 @app.post("/explain", response_model=ExplainResponse)
@@ -380,9 +458,62 @@ def explain(req: ExplainRequest) -> ExplainResponse:
     return ExplainResponse(explanation=explanation, tags=tags or ["Insight ready"])
 
 
+@app.post("/export/pdf")
+def export_pdf(req: PdfRequest) -> Response:
+    try:
+        pdf_bytes = build_pdf(req)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail="Failed to build PDF") from exc
+    headers = {"Content-Disposition": "attachment; filename=summary.pdf"}
+    return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+
 @app.get("/integrations/google-sheets")
 def connect_google_sheets() -> Dict[str, str]:
     return {"status": "ready", "message": "OAuth flow placeholder for Google Sheets."}
+
+
+def fetch_google_sheet_csv(url: str) -> bytes:
+    if not url:
+        raise ValueError("Missing Google Sheet URL")
+    try:
+        res = requests.get(url, timeout=15)
+        res.raise_for_status()
+        return res.content
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("Unable to fetch Google Sheet CSV. Ensure the sheet is shared and using a CSV export link.") from exc
+
+
+@app.post("/integrations/google-sheets/import", response_model=UploadResponse)
+def import_google_sheet(
+    sheet_csv_url: str = Form(...),
+    date_column: Optional[str] = Form(None),
+    revenue_column: Optional[str] = Form(None),
+    category_column: Optional[str] = Form(None),
+) -> UploadResponse:
+    content = fetch_google_sheet_csv(sheet_csv_url)
+    try:
+        rows = parse_csv(content)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    schema = apply_overrides(
+        guess_schema(rows[0]),
+        {
+            "date_column": date_column,
+            "revenue_column": revenue_column,
+            "category_column": category_column,
+        },
+    )
+    if not schema.date or not schema.revenue:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Missing required columns. Please map a date column and an amount/revenue column.",
+                "columns": list(rows[0].keys()),
+            },
+        )
+    return assemble_payload(rows, schema)
 
 
 @app.get("/integrations/shopify")

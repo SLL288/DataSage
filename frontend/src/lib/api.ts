@@ -75,3 +75,50 @@ export async function explainPeriod(payload: {
   }
   return res.json();
 }
+
+export async function importGoogleSheet(
+  sheet_csv_url: string,
+  mapping?: { date_column?: string; revenue_column?: string; category_column?: string }
+): Promise<UploadResult> {
+  const form = new FormData();
+  form.append("sheet_csv_url", sheet_csv_url);
+  if (mapping?.date_column) form.append("date_column", mapping.date_column);
+  if (mapping?.revenue_column) form.append("revenue_column", mapping.revenue_column);
+  if (mapping?.category_column) form.append("category_column", mapping.category_column);
+
+  const res = await fetch(`${API_BASE}/integrations/google-sheets/import`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const raw = await res.text();
+    let detail: any = raw;
+    try {
+      detail = JSON.parse(raw);
+    } catch {
+      // ignore
+    }
+    const err = new Error(typeof detail === "string" ? detail : detail?.message || "Google Sheet import failed");
+    (err as any).detail = detail;
+    throw err;
+  }
+  return (await res.json()) as UploadResult;
+}
+
+export async function exportPdf(payload: {
+  metrics: UploadResult["metrics"];
+  timeseries: UploadResult["timeseries"];
+  categories: UploadResult["categories"];
+  anomalies: UploadResult["anomalies"];
+  narrative: string;
+}): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/export/pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+  return await res.blob();
+}
