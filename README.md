@@ -24,7 +24,7 @@ Mono-repo scaffold for a data insights product:
    npm install
    npm run dev
    ```
-3) Visit http://localhost:3000. Update `.env.local` with `NEXT_PUBLIC_API_BASE=http://localhost:8000`.
+3) Visit http://localhost:3000. The frontend defaults to the hosted API `https://datasage-api.onrender.com`; override via `.env.local` with `NEXT_PUBLIC_API_BASE=http://localhost:8000` for local backend.
 
 ### Notes
 - All integrations are stubbed; wire real credentials and persistence as needed.
