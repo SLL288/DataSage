@@ -476,12 +476,23 @@ def connect_google_sheets() -> Dict[str, str]:
 def fetch_google_sheet_csv(url: str) -> bytes:
     if not url:
         raise ValueError("Missing Google Sheet URL")
+    # Normalize common Google Sheets share links into CSV export links
+    if "spreadsheets/d/" in url and "export" not in url:
+        # typical share: https://docs.google.com/spreadsheets/d/<id>/edit#gid=0
+        try:
+            doc_id = url.split("/d/")[1].split("/")[0]
+            url = f"https://docs.google.com/spreadsheets/d/{doc_id}/export?format=csv"
+        except Exception:
+            # fall through with original url
+            ...
     try:
         res = requests.get(url, timeout=15)
         res.raise_for_status()
         return res.content
     except Exception as exc:  # noqa: BLE001
-        raise ValueError("Unable to fetch Google Sheet CSV. Ensure the sheet is shared and using a CSV export link.") from exc
+        raise ValueError(
+            "Unable to fetch Google Sheet CSV. Ensure the sheet is published to web or use the CSV export link."
+        ) from exc
 
 
 @app.post("/integrations/google-sheets/import", response_model=UploadResponse)
