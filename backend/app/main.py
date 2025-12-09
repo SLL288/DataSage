@@ -60,6 +60,11 @@ class Anomaly(BaseModel):
     message: str
 
 
+class TimePoint(BaseModel):
+    date: str
+    revenue: float
+
+
 class CategoryBreakdown(BaseModel):
     name: str
     total: float
@@ -68,7 +73,7 @@ class CategoryBreakdown(BaseModel):
 class UploadResponse(BaseModel):
     schema: SchemaGuess
     metrics: MetricBreakdown
-    timeseries: List[Dict[str, float]]
+    timeseries: List[TimePoint]
     anomalies: List[Anomaly]
     narrative: str
     columns: List[str]
@@ -89,7 +94,7 @@ class ExplainResponse(BaseModel):
 
 class PdfRequest(BaseModel):
     metrics: MetricBreakdown
-    timeseries: List[Dict[str, float]] = []
+    timeseries: List[TimePoint] = []
     categories: List[CategoryBreakdown] = []
     anomalies: List[Anomaly] = []
     narrative: str
@@ -180,7 +185,7 @@ def coerce_date(value: str) -> Optional[datetime]:
     return None
 
 
-def build_timeseries(rows: List[Dict[str, str]], schema: SchemaGuess) -> List[Dict[str, float]]:
+def build_timeseries(rows: List[Dict[str, str]], schema: SchemaGuess) -> List[TimePoint]:
     if not schema.date or not schema.revenue:
         return []
 
@@ -192,7 +197,7 @@ def build_timeseries(rows: List[Dict[str, str]], schema: SchemaGuess) -> List[Di
         revenue = coerce_float(row.get(schema.revenue, "0"))
         rollup[dt] = rollup.get(dt, 0) + revenue
 
-    series = [{"date": dt.strftime("%Y-%m-%d"), "revenue": value} for dt, value in sorted(rollup.items())]
+    series = [TimePoint(date=dt.strftime("%Y-%m-%d"), revenue=value) for dt, value in sorted(rollup.items())]
     return series
 
 
