@@ -18,9 +18,18 @@ from reportlab.pdfgen import canvas
 
 app = FastAPI(title="Data Insights API", version="0.1.0")
 
+# Explicit CORS allowlist; includes Cloudflare Pages and localhost, falls back to "*".
+default_origins = [
+    "https://datasage-815.pages.dev",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "*",
+]
+allow_origins = os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if os.getenv("CORS_ALLOW_ORIGINS") else default_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in allow_origins if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
