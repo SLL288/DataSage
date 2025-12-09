@@ -23,14 +23,13 @@ default_origins = [
     "https://datasage-815.pages.dev",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "*",
 ]
 allow_origins = os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if os.getenv("CORS_ALLOW_ORIGINS") else default_origins
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in allow_origins if o.strip()],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -403,7 +402,10 @@ async def upload(
     revenue_column: Optional[str] = Form(None),
     category_column: Optional[str] = Form(None),
 ) -> UploadResponse:
-    content = await file.read()
+    try:
+        content = await file.read()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Failed to read uploaded file") from exc
     try:
         if file.filename and file.filename.lower().endswith((".xlsx", ".xls")):
             rows = parse_excel(content)
@@ -517,26 +519,27 @@ def import_google_sheet(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         rows = parse_csv(content)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    schema = apply_overrides(
-        guess_schema(rows[0]),
-        {
-            "date_column": date_column,
-            "revenue_column": revenue_column,
-            "category_column": category_column,
-        },
-    )
-    if not schema.date or not schema.revenue:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "Missing required columns. Please map a date column and an amount/revenue column.",
-                "columns": list(rows[0].keys()),
+        schema = apply_overrides(
+            guess_schema(rows[0]),
+            {
+                "date_column": date_column,
+                "revenue_column": revenue_column,
+                "category_column": category_column,
             },
         )
-    return assemble_payload(rows, schema)
+        if not schema.date or not schema.revenue:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "Missing required columns. Please map a date column and an amount/revenue column.",
+                    "columns": list(rows[0].keys()),
+                },
+            )
+        return assemble_payload(rows, schema)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/integrations/shopify")
