@@ -42,14 +42,17 @@ export default function SummaryCard({ narrative, tags, onExplain, loadingExplain
           ))}
         </div>
       )}
-      <button
-        className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 transition disabled:opacity-60"
-        onClick={onExplain}
-        disabled={loadingExplain}
-      >
-        {loadingExplain ? "Explaining..." : "Explain this period"}
-        <span className="text-brand-100">→</span>
-      </button>
+      <div className="mt-4 space-y-1">
+        <button
+          className="inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 transition disabled:opacity-60"
+          onClick={onExplain}
+          disabled={loadingExplain}
+        >
+          {loadingExplain ? "Explaining..." : "Explain this period"}
+          <span className="text-brand-100">→</span>
+        </button>
+        <p className="text-xs text-[var(--muted)]">AI explanation is in early beta. Output may be generic if no model key is configured.</p>
+      </div>
       <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-4">
         <p className="text-xs uppercase tracking-[0.15em] text-[var(--muted)]">Weekly PDF Email</p>
         <p className="text-sm text-white">{weekly}</p>

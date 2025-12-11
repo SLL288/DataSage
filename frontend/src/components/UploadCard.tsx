@@ -4,9 +4,10 @@ type Props = {
   onUpload: (file: File) => void;
   loading?: boolean;
   error?: string | null;
+  inputId?: string;
 };
 
-export default function UploadCard({ onUpload, loading, error }: Props) {
+export default function UploadCard({ onUpload, loading, error, inputId }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const handleChange = (evt: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,7 +35,14 @@ export default function UploadCard({ onUpload, loading, error }: Props) {
             →
           </span>
         </button>
-        <input ref={inputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleChange} className="hidden" />
+        <input
+          ref={inputRef}
+          id={inputId}
+          type="file"
+          accept=".csv,.xlsx,.xls"
+          onChange={handleChange}
+          className="hidden"
+        />
       </div>
       <div className="mt-4 flex items-center gap-3 text-xs text-[var(--muted)]">
         <div className="h-1 w-16 animate-pulse rounded-full bg-brand-500/70" />
